@@ -1,0 +1,13 @@
+{
+    "name": "cst8918-a03-infra",
+    "main": "index.ts",
+    "devDependencies": {
+        "@types/node": "^18",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "@pulumi/azure-native": "^3.5.0",
+        "@pulumi/docker-build": "^0.0.12",
+        "@pulumi/pulumi": "^3.113.0"
+    }
+}
