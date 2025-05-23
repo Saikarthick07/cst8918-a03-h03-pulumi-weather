@@ -6,4 +6,6 @@ config:
   cst8918-a03-infra:cpu: "1"
   cst8918-a03-infra:memory: "2"
   cst8918-a03-infra:prefixName: cst8918a03saikarthick
-  cst8918-a03-infra:imageTag: v0.2.0
+  cst8918-a03-infra:imageTag: v0.3.0
+  cst8918-a03-infra:weatherApiKey:
+    secure: AAABAOmmzEJygIPI4IwCvUx8944o3GCNyfntK6b/5beW2U5nqmn3R8Tx4IwwU38+9BK/NiGB5y8OHrGb21nBEw==

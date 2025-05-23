@@ -71,8 +71,9 @@ const registryCredentials = containerregistry.listRegistryCredentialsOutput({
       ports: [{ port: containerPort, protocol: 'tcp' }],
       environmentVariables: [
         { name: 'PORT', value: containerPort.toString() },
-        { name: 'WEATHER_API_KEY', value: 'c1cd94d0c2cb97ac875ae02cd53a2c7d' }, // Replace with actual key
+        { name: 'WEATHER_API_KEY', value: config.requireSecret('weatherApiKey') }, // ✅ Secure secret
       ],
+      
       resources: {
         requests: { cpu, memoryInGB: memory },
       },
