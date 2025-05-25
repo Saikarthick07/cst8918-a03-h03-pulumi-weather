@@ -35,9 +35,24 @@ export async function loader() {
   return json({ currentConditions: data })
 }
 
+// ...existing imports and code...
+
 export default function CurrentConditions() {
   const { currentConditions } = useLoaderData<typeof loader>()
-  const weather = currentConditions.weather[0]
+  const weather = currentConditions?.weather?.[0]
+  const temp = currentConditions?.main?.temp
+  const feelsLike = currentConditions?.main?.feels_like
+  const updatedAt = currentConditions?.dt
+
+  if (!weather || temp === undefined || feelsLike === undefined || !updatedAt) {
+    return (
+      <main style={{ padding: '1.5rem', fontFamily: 'system-ui, sans-serif', lineHeight: '1.8' }}>
+        <h1>Remix Weather</h1>
+        <p>No weather data available.</p>
+      </main>
+    )
+  }
+
   return (
     <>
       <main
@@ -65,7 +80,7 @@ export default function CurrentConditions() {
         >
           <img src={getWeatherIconUrl(weather.icon)} alt="" />
           <div style={{ fontSize: '2rem' }}>
-            {currentConditions.main.temp.toFixed(1)}°C
+            {temp.toFixed(1)}°C
           </div>
         </div>
         <p
@@ -75,7 +90,7 @@ export default function CurrentConditions() {
           }}
         >
           {capitalizeFirstLetter(weather.description)}. Feels like{' '}
-          {currentConditions.main['feels_like'].toFixed(1)}°C.
+          {feelsLike.toFixed(1)}°C.
           <br />
           <span style={{ color: 'hsl(220, 23%, 60%)', fontSize: '0.85rem' }}>
             updated at{' '}
@@ -85,7 +100,7 @@ export default function CurrentConditions() {
               day: 'numeric',
               hour: 'numeric',
               minute: '2-digit',
-            }).format(currentConditions.dt * 1000)}
+            }).format(updatedAt * 1000)}
           </span>
         </p>
       </main>
@@ -109,7 +124,6 @@ export default function CurrentConditions() {
     </>
   )
 }
-
 function getWeatherIconUrl(iconCode: string) {
   return `http://openweathermap.org/img/wn/${iconCode}@2x.png`
 }

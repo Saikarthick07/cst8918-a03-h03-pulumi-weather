@@ -1,10 +1,10 @@
 # base node image
 FROM node:lts-alpine as base
 
-# update the openssl package to apply a security patch @see CVE-2023-6129⁠
+# update the openssl package to apply a security patch @see CVE-2023-6129
 RUN apk -U add --update-cache openssl
 
-# set for base and all layer that inherit from it
+# set for base and all layers that inherit from it
 ENV NODE_ENV=production
 
 # Install all node_modules, including dev dependencies
@@ -30,17 +30,15 @@ FROM base as build
 WORKDIR /usr/src/app
 
 COPY --from=deps /usr/src/app/node_modules /usr/src/app/node_modules
-
 ADD . .
 RUN npm run build
 
-# Finally, build the production image with minimal footprint
-FROM base
+# ✅ Final production stage (named 'production' for Pulumi target compatibility)
+FROM base as production
 
 WORKDIR /usr/src/app
 
 COPY --from=production-deps /usr/src/app/node_modules /usr/src/app/node_modules
-
 COPY --from=build /usr/src/app/build /usr/src/app/build
 COPY --from=build /usr/src/app/public /usr/src/app/public
 COPY --from=build /usr/src/app/package.json /usr/src/app/package.json

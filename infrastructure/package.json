@@ -8,6 +8,13 @@
     "dependencies": {
         "@pulumi/azure-native": "^3.5.0",
         "@pulumi/docker-build": "^0.0.12",
-        "@pulumi/pulumi": "^3.113.0"
+        "@pulumi/pulumi": "^3.171.0",
+        "redis": "^5.1.0"
+    },
+    "scripts": {
+        "dev": "pulumi preview",
+        "build": "tsc",
+        "up": "pulumi up",
+        "destroy": "pulumi destroy"
     }
 }

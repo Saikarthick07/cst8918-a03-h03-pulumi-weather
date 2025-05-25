@@ -1,43 +1,71 @@
-import * as pulumi from "@pulumi/pulumi"
-import * as resources from '@pulumi/azure-native/resources'
-import * as containerregistry from '@pulumi/azure-native/containerregistry'
-import * as dockerBuild from '@pulumi/docker-build'
-import * as containerinstance from '@pulumi/azure-native/containerinstance'
+  import * as pulumi from "@pulumi/pulumi"
+  import * as resources from '@pulumi/azure-native/resources'
+  import * as containerregistry from '@pulumi/azure-native/containerregistry'
+  import * as dockerBuild from '@pulumi/docker-build'
+  import * as containerinstance from '@pulumi/azure-native/containerinstance'
+  import * as redis from '@pulumi/azure-native/redis'
 
-// Load Config Values
+  // Load Config Values
+  const config = new pulumi.Config()
+  const appPath = config.require('appPath')
+  const prefixName = config.require('prefixName')
+  const imageName = prefixName
+  const imageTag = config.require('imageTag')
+  const containerPort = config.requireNumber('containerPort')
+  const publicPort = config.requireNumber('publicPort')
+  const cpu = config.requireNumber('cpu')
+  const memory = config.requireNumber('memory')
 
-const config = new pulumi.Config()
-const appPath = config.require('appPath')
-const prefixName = config.require('prefixName')
-const imageName = prefixName
-const imageTag = config.require('imageTag')
-const containerPort = config.requireNumber('containerPort')
-const publicPort = config.requireNumber('publicPort')
-const cpu = config.requireNumber('cpu')
-const memory = config.requireNumber('memory')
+  // Create Resource Group and Container Registry
 
-// Create Resource Group and Container Registry
+  const resourceGroup = new resources.ResourceGroup(`${prefixName}-rg`)
 
-const resourceGroup = new resources.ResourceGroup(`${prefixName}-rg`)
-
-const registry = new containerregistry.Registry(`${prefixName}ACR`, {
+  const registry = new containerregistry.Registry(`${prefixName}ACR`, {
   resourceGroupName: resourceGroup.name,
   adminUserEnabled: true,
   sku: { name: containerregistry.SkuName.Basic },
-})
+  })
 
-// Get Registry Credentials
+  // Get Registry Credentials
 
-const registryCredentials = containerregistry.listRegistryCredentialsOutput({
-    resourceGroupName: resourceGroup.name,
-    registryName: registry.name,
+  const registryCredentials = containerregistry.listRegistryCredentialsOutput({
+  resourceGroupName: resourceGroup.name,
+  registryName: registry.name,
   }).apply((creds) => ({
-    username: creds.username!,
-    password: creds.passwords![0].value!,
+  username: creds.username!,
+  password: creds.passwords![0].value!,
   }))
 
-  // Create and Push Docker Image
+  // Create a managed Redis service
 
+  const redisCache = new redis.Redis(`${prefixName}-redis`, {
+  name: `${prefixName}-weather-cache`,
+  location: 'westus3',
+  resourceGroupName: resourceGroup.name,
+  enableNonSslPort: true,
+  redisVersion: 'latest',
+  minimumTlsVersion: '1.2',
+  redisConfiguration: {
+    maxmemoryPolicy: 'allkeys-lru',
+  },
+  sku: {
+    name: 'Basic',
+    family: 'C',
+    capacity: 0,
+  },
+  })
+
+
+  // Extract the auth creds from the deployed Redis service
+  const redisAccessKey = redis.listRedisKeysOutput({
+  name: redisCache.name,
+  resourceGroupName: resourceGroup.name,
+  }).apply((keys: redis.ListRedisKeysResult) => keys.primaryKey)
+
+  // Construct the Redis connection string to be passed as an environment variable in the app container
+  const redisConnectionString = pulumi.interpolate`rediss://:${redisAccessKey}@${redisCache.hostName}:${redisCache.sslPort}`
+
+  // Create and Push Docker Image
   const image = new dockerBuild.Image(`${prefixName}-image`, {
     tags: [pulumi.interpolate`${registry.loginServer}/${imageName}:${imageTag}`],
     context: { location: appPath },
@@ -57,38 +85,37 @@ const registryCredentials = containerregistry.listRegistryCredentialsOutput({
   // Create Azure Container Instance
 
   const containerGroup = new containerinstance.ContainerGroup(`${prefixName}-container-group`, {
-    resourceGroupName: resourceGroup.name,
-    osType: 'linux',
-    restartPolicy: 'always',
-    imageRegistryCredentials: [{
-      server: registry.loginServer,
-      username: registryCredentials.username,
-      password: registryCredentials.password,
-    }],
-    containers: [{
-      name: imageName,
-      image: image.ref,
-      ports: [{ port: containerPort, protocol: 'tcp' }],
-      environmentVariables: [
-        { name: 'PORT', value: containerPort.toString() },
-        { name: 'WEATHER_API_KEY', value: 'c1cd94d0c2cb97ac875ae02cd53a2c7d' }, // Replace with actual key
-      ],
-      resources: {
-        requests: { cpu, memoryInGB: memory },
-      },
-    }],
-    ipAddress: {
-      type: containerinstance.ContainerGroupIpAddressType.Public,
-      dnsNameLabel: `${imageName}`,
-      ports: [{ port: publicPort, protocol: 'tcp' }],
-    },
+  resourceGroupName: resourceGroup.name,
+  osType: 'linux',
+  restartPolicy: 'always',
+  imageRegistryCredentials: [{
+  server: registry.loginServer,
+  username: registryCredentials.username,
+  password: registryCredentials.password,
+  }],
+  containers: [{
+  name: imageName,
+  image: image.ref,
+  ports: [{ port: containerPort, protocol: 'tcp' }],
+  environmentVariables: [
+    { name: 'PORT', value: containerPort.toString() },
+    { name: 'WEATHER_API_KEY', value: config.requireSecret('weatherApiKey') },
+    { name: 'REDIS_URL', value: redisConnectionString }, // <-- Add this line
+  ],
+  resources: {
+    requests: { cpu, memoryInGB: memory },
+  },
+  }],
+  ipAddress: {
+  type: containerinstance.ContainerGroupIpAddressType.Public,
+  dnsNameLabel: `${imageName}`,
+  ports: [{ port: publicPort, protocol: 'tcp' }],
+  },
   })
-
   // Export Deployment Outputs
 
-export const hostname = containerGroup.ipAddress.apply(addr => addr!.fqdn!)
-export const ip = containerGroup.ipAddress.apply(addr => addr!.ip!)
-export const url = containerGroup.ipAddress.apply(addr => `http://${addr!.fqdn!}:${containerPort}`)
+  export const hostname = containerGroup.ipAddress.apply(addr => addr!.fqdn!)
+  export const ip = containerGroup.ipAddress.apply(addr => addr!.ip!)
+  export const url = containerGroup.ipAddress.apply(addr => `http://${addr!.fqdn!}:${containerPort}`)
 
-  
 
